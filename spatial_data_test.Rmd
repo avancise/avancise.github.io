@@ -75,7 +75,7 @@ m
 
 ###Crawl model fit
 For each individual, fit a correlated random walk model to the data and estimate parameters a and P.
-```{r crawlinput, warning=FALSE, message=FALSE, echo=FALSE}
+```{r crawlinput, warning=FALSE, message=FALSE, echo=FALSE, cache=TRUE}
 library(crawl)
 library(pander)
 
@@ -169,9 +169,9 @@ spdatafit$params %>%
 ```
 
 ###Predicted paths
-Using the fit parameters, predict the most likely paths for two animals.
+Using the fit parameters, predict the most likely paths for two animals. The below graphs show the estimated x and y track for each individual, and then a final map pulling all the data together.
 
-```{r crawlpredictions, warning=FALSE, message=FALSE, echo=FALSE}
+```{r crawlpredictions, warning=FALSE, message=FALSE, echo=FALSE, cache=TRUE}
 
 ##crawl predictions
 spdatafit <- spdatafit %>% 
