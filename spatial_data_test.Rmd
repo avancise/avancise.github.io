@@ -2,7 +2,7 @@
 title: "Hawaiian SFPW movement analysis"
 author: "Amy Van Cise"
 date: "April 18, 2017"
-output: github_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -45,9 +45,11 @@ spdata<-data %>% sf::st_as_sf(coords=c("longitud","latitude")) %>%
 
 ```
 ###Data included
-  Tag data from short-finned pilot whales throughout the Main Hawaiian Isalnds. There are `r ntags` tags included in this dataset. 
+  Tag data from `r ntags` short-finned pilot whales tagged near Maui. The data set includes latitude, longitude, location quality and datetime. The last column was modified from date and time columns to be understood in the R environment.
+  
 
-## Plot of data
+## Data plot
+Using leaflet, an interactive plot of the data for two individuals.
 
 ```{r pressure, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
 library(leaflet)
@@ -61,10 +63,6 @@ pal <- colorFactor(ggthemes::ptol_pal()(2),
                    domain = spdata$animal)
 
 m<-spdata %>% 
-  #group_by(animal) %>% 
-  #nest() %>% 
-  #sample_n(1) %>% 
-  #unnest() %>% 
   leaflet() %>%
   addProviderTiles(provider="Esri.OceanBasemap") %>% 
   addCircleMarkers(radius=1,weight=2, opacity=0.5, color = ~pal(animal)) %>%
@@ -76,6 +74,7 @@ m
 ```
 
 ###Crawl model fit
+For each individual, fit a correlated random walk model to the data and estimate parameters a and P.
 ```{r crawlinput, warning=FALSE, message=FALSE, echo=FALSE}
 library(crawl)
 library(pander)
@@ -169,7 +168,8 @@ spdatafit$params %>%
 
 ```
 
-###Use the fit parameters to predict paths for two animals
+###Predicted paths
+Using the fit parameters, predict the most likely paths for two animals.
 
 ```{r crawlpredictions, warning=FALSE, message=FALSE, echo=FALSE}
 
@@ -237,14 +237,8 @@ m
 
 ```
 
-##static map of the data
-```{r crawlmap static, warning=FALSE, message=FALSE, echo=FALSE}
-library(nPacMaps)
-library(raster)
-library(gdistance)
-```
-
-##create and map simulated tracks from error distribution using crawlr
+##Simulate error in track prediction
+Use the posterior distributin of the model to generate N simulated tracksCreate and map simulated tracks from posterior distribution using crawlr. 
 ```{r crawlr sim tracks, warning=FALSE, message=FALSE, echo=FALSE}
 library(crawlr)
 
