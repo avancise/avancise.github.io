@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Introduction
-  This workshop is an introduction to the use of the crawl package to 
+  This workshop is an introduction to the use of the crawl package to predict individual movement paths from the posterior distributin of a correlated random walk model. Using the model fits, we can calculate utilization distributions for comparison with environmental variables.
 
 
 ```{r read data, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
@@ -20,15 +20,15 @@ library(lubridate)
 library(magrittr)
 library(stringr)
 
-setwd("C:/Users/Amy/Documents/1 SIO/6 Year/crawl workhop")
-data<-readr::read_csv("GmAll-Tag167-Complete_r15d3lc2.csv")
+setwd("C:/Users/Amy/Documents/1 SIO/6 Year/crawl workhop/avancise.github.io")
+data<-readr::read_csv("Gmac example tag data.csv")[,2:77]
 colnames(data)<-tolower(colnames(data))
 
 ##specify date formate using lubridate
 data<-data %>%
   dplyr::mutate(date2=paste(data$date,data$time, sep=" ")) %>%
-  dplyr::mutate(datetime=lubridate::mdy_hms(date2))
-
+  dplyr::mutate(datetime=lubridate::mdy_hms(date2)) 
+  
 #count number of tags
 ntags<- data$animal %>% unique() %>% length()
 
@@ -162,7 +162,6 @@ fit<- crawl::crwMLE(
   }
 
 spdatafit <- spdata %>% 
-  sample_n(5) %>% 
   dplyr::mutate(fit = purrr::map2(data,init, fit_crawl),
                 params = map(fit, crawl::tidy_crwFit))
 
