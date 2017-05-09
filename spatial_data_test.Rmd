@@ -37,9 +37,6 @@ data$lc94<-data$lc94 %>%
   replace(list=which(data$lc94=="DP"),values="L3") %>% 
   str_sub(start=-1)
 
-# data<-cbind.data.frame(data$animal, data$datetime, data$latitude, data$longitud, data$lc94)
-# colnames(data)<-c("animal","datetime","latitude","longitud","lc94")
-
 ##convert dataframe into a spatial data class (sf)
 spdata<-data %>% sf::st_as_sf(coords=c("longitud","latitude")) %>% 
   sf::st_set_crs(.,4326)
@@ -70,7 +67,7 @@ m<-spdata %>%
   #unnest() %>% 
   leaflet() %>%
   addProviderTiles(provider="Esri.OceanBasemap") %>% 
-  addCircleMarkers(radius=1,weight=2, opacity=0.5, color = 'red') %>%
+  addCircleMarkers(radius=1,weight=2, opacity=0.5, color = ~pal(animal)) %>%
   #addPolylines(lng=~x, lat=~y, group = ~animal, color='red') %>% 
   addLegend(pal = pal,values = ~animal,labels = ~animal)
 
