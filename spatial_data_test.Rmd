@@ -1,0 +1,288 @@
+---
+title: "Hawaiian SFPW movement analysis"
+author: "Amy Van Cise"
+date: "April 18, 2017"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+  This workshop is an introduction to the use of the crawl package to 
+
+
+```{r read data, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
+rm(list=ls())
+library(tidyverse)
+library(lubridate)
+library(magrittr)
+library(stringr)
+
+setwd("C:/Users/Amy/Documents/1 SIO/6 Year/crawl workhop")
+data<-readr::read_csv("GmAll-Tag167-Complete_r15d3lc2.csv")
+colnames(data)<-tolower(colnames(data))
+
+##specify date formate using lubridate
+data<-data %>%
+  dplyr::mutate(date2=paste(data$date,data$time, sep=" ")) %>%
+  dplyr::mutate(datetime=lubridate::mdy_hms(date2))
+
+#count number of tags
+ntags<- data$animal %>% unique() %>% length()
+
+#convert location quality to 3,2,1,A,B
+data$lc94<-data$lc94 %>% 
+  replace(list=which(data$lc94=="DP"),values="L3") %>% 
+  str_sub(start=-1)
+
+# data<-cbind.data.frame(data$animal, data$datetime, data$latitude, data$longitud, data$lc94)
+# colnames(data)<-c("animal","datetime","latitude","longitud","lc94")
+
+##convert dataframe into a spatial data class (sf)
+spdata<-data %>% sf::st_as_sf(coords=c("longitud","latitude")) %>% 
+  sf::st_set_crs(.,4326)
+  
+
+
+```
+###Data included
+  Tag data from short-finned pilot whales throughout the Main Hawaiian Isalnds. There are `r ntags` tags included in this dataset. 
+
+## Plot of data
+
+```{r pressure, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
+library(leaflet)
+library(sf)
+library(sp)
+library(mapview)
+library(ggthemes)
+
+
+pal <- colorFactor(ggthemes::ptol_pal()(2), 
+                   domain = spdata$animal)
+
+m<-spdata %>% 
+  #group_by(animal) %>% 
+  #nest() %>% 
+  #sample_n(1) %>% 
+  #unnest() %>% 
+  leaflet() %>%
+  addProviderTiles(provider="Esri.OceanBasemap") %>% 
+  addCircleMarkers(radius=1,weight=2, opacity=0.5, color = 'red') %>%
+  #addPolylines(lng=~x, lat=~y, group = ~animal, color='red') %>% 
+  addLegend(pal = pal,values = ~animal,labels = ~animal)
+
+m
+
+```
+
+###Crawl model fit
+```{r crawlinput, warning=FALSE, message=FALSE, echo=FALSE}
+library(crawl)
+library(pander)
+
+spdata<-spdata %>% sf::st_transform(2785)
+
+##function to add x and y columns to spatial data class
+sfc_as_cols <- function(x, names = c("x","y")) {
+  stopifnot(inherits(x,"sf") && inherits(sf::st_geometry(x),"sfc_POINT"))
+  ret <- do.call(rbind,sf::st_geometry(x))
+  ret <- tibble::as_tibble(ret)
+  stopifnot(length(names) == ncol(ret))
+  ret <- setNames(ret,names)
+  dplyr::bind_cols(x,ret)
+}
+
+spdata<-spdata %>% sfc_as_cols
+
+#nest spdata
+spdata<-spdata %>% 
+  group_by(animal) %>% 
+  nest()
+
+
+## set initial parameters for model
+init_params <- function(d) {
+  ret <- list(a = c(d$x[1], 0,
+                    d$y[1], 0),
+              P = diag(c(10 ^ 2, 10 ^ 2,
+                         10 ^ 2, 10 ^ 2)))
+  ret
+} 
+
+##attach parameters to the dataset
+
+spdata <- spdata %>% 
+  dplyr::mutate(init = purrr::map(data,init_params)
+                )
+
+#make sure errors are correctly ordered
+order_lc<-function(x) {
+  x$lc94 = factor(x$lc94, levels = c("3","2","1","0","A","B"))
+  return(x)
+}
+
+spdata<-spdata %>% 
+  dplyr::mutate(data=purrr::map(data,order_lc))
+
+#set priors for all the parameters to be estimated
+
+fit_crawl <- function(d, init) {
+
+prior<-function(p){
+  dnorm(p[1],log(250), 0.2, log=TRUE) +
+  dnorm(p[2],log(500), 0.2, log=TRUE) +
+  dnorm(p[3],log(1500), 0.2, log=TRUE) +
+  dnorm(p[4],log(2500), 0.4, log=TRUE) +
+  dnorm(p[5],log(2500), 0.4, log=TRUE) +
+  dnorm(p[6],log(2500), 0.4, log=TRUE) +
+  dnorm(p[8],-4, 2, log=TRUE)
+}
+    
+fit<- crawl::crwMLE(
+  mov.model = ~1,
+  err.model = list(x= ~lc94-1),
+  data=d,
+  method="Nelder-Mead",
+  Time.name = "datetime",
+  initial.state = init,
+  prior = prior,
+  attempts = 8,
+  control = list(
+    trace = 0
+    ),
+  initialSANN = list(
+    maxit = 1500,
+    trace = 0
+    )
+)        
+  fit
+  }
+
+spdatafit <- spdata %>% 
+  sample_n(5) %>% 
+  dplyr::mutate(fit = purrr::map2(data,init, fit_crawl),
+                params = map(fit, crawl::tidy_crwFit))
+
+##table of parameters
+panderOptions('knitr.auto.asis', FALSE)
+spdatafit$params %>% 
+  walk(pander::pander,caption = "crwMLE fit parameters")
+
+```
+
+###Use the fit parameters to predict paths for two animals
+
+```{r crawlpredictions, warning=FALSE, message=FALSE, echo=FALSE}
+
+##crawl predictions
+spdatafit <- spdatafit %>% 
+  dplyr::mutate(predict = purrr::map(fit,
+                                     crawl::crwPredict,
+                                     predTime = '1 hour')) 
+
+#graphs of x and y vs time
+spdatafit$predict %>% purrr::walk(crawl::crwPredictPlot)
+
+##function to change predictions to a spatial object
+as.sf <- function(p,id,epsg,type,loctype) {
+  p <- 
+    sf::st_as_sf(p, coords = c("mu.x","mu.y")) %>% 
+    dplyr::mutate(TimeNum = lubridate::as_datetime(TimeNum),
+                  deployid = id) %>% 
+    dplyr::rename(pred_dt = TimeNum) %>% 
+    filter(loctype %in% loctype) %>% 
+    sf::st_set_crs(.,epsg)
+  if (type == "POINT") return(p)
+  if (type == "LINE") {
+    p <- p %>% dplyr::arrange(pred_dt) %>%  
+      sf::st_geometry() %>% 
+      st_cast("MULTIPOINT",ids = as.integer(as.factor(p$deployid))) %>% 
+      st_cast("MULTILINESTRING") %>% 
+      st_sf(deployid = unique(p$deployid))
+    return(p)
+  }
+}
+
+#convert fit to spatial object using above function
+spdatafit <- spdatafit %>% 
+  dplyr::mutate(sf_points = purrr::map2(predict, animal,
+                                       as.sf,
+                                       epsg = 2785, 
+                                       type = "POINT",
+                                       loctype = "p"),
+                sf_line = purrr::map2(predict, animal,
+                                     as.sf,
+                                     epsg = 2785,
+                                     type = "LINE",
+                                     loctype = "p"))
+
+#pull predicted lines from spdata and rbind the lines together
+sf_pred_lines <- spdatafit$sf_line %>% 
+  lift(rbind)() %>% 
+  sf::st_set_crs(2785) 
+
+n <- length(unique(sf_pred_lines$deployid)) #calculate # of individuals
+pal <- colorFactor(ggthemes::ptol_pal()(n), 
+                   domain = sf_pred_lines$deployid) #set color pallete
+
+#map of paths
+m <- sf_pred_lines %>% 
+  sf::st_transform(4326) %>% 
+  leaflet() %>% 
+  addProviderTiles("Esri.OceanBasemap") %>% 
+  addPolylines(weight = 2, color = ~pal(deployid)) %>% 
+  addLegend(pal = pal,values = ~deployid,labels = ~deployid) 
+  #suspendScroll()
+
+m
+
+```
+
+##static map of the data
+```{r crawlmap static, warning=FALSE, message=FALSE, echo=FALSE}
+library(nPacMaps)
+library(raster)
+library(gdistance)
+```
+
+##create and map simulated tracks from error distribution using crawlr
+```{r crawlr sim tracks, warning=FALSE, message=FALSE, echo=FALSE}
+library(crawlr)
+
+getsims<-function(x, iter, fixpath=FALSE, basemap) {
+  predTimes <- seq(
+    lubridate::ceiling_date(min(x$data$datetime), "hour"),
+    lubridate::floor_date(max(x$data$datetime), "hour"),
+    "1 hour"
+    )
+trk<-crawlr::get_sim_tracks(x, iter=iter, predTimes)
+}
+
+tracks<-getsims(spdatafit$fit[[1]], 20)
+
+sim_points <- crawlr::get_sim_points(tracks, locType = "p", CRS("+init=epsg:2785"))
+
+##map of predicted lines
+
+#convert to sf object
+sim_points <- sf::st_as_sf(sim_points)
+sim_points <- sf::st_transform(sim_points,4326)
+
+#build map using leaflet
+m<-sf_pred_lines %>% 
+  sf::st_transform(4326) %>% 
+  leaflet() %>% 
+  addProviderTiles("Esri.OceanBasemap") %>% 
+  addCircleMarkers(data = sample_frac(sim_points, 0.25), radius = 2, weight = 2, 
+                   opacity = 3, stroke = FALSE,
+                   color = "purple") %>% 
+  addPolylines(weight = 2, color = ~pal(deployid)) %>% 
+  addLegend(pal = pal, values = ~deployid, labels = ~deployid)
+
+m
+  
+```
+
