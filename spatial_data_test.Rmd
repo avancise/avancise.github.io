@@ -48,7 +48,7 @@ spdata<-data %>% sf::st_as_sf(coords=c("longitud","latitude")) %>%
   Tag data from `r ntags` short-finned pilot whales tagged near Maui. The data set includes latitude, longitude, location quality and datetime. The last column was modified from date and time columns to be understood in the R environment.
   
 
-## Data plot
+##Data plot
 Using leaflet, an interactive plot of the data for two individuals.
 
 ```{r pressure, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
@@ -62,16 +62,17 @@ library(ggthemes)
 pal <- colorFactor(ggthemes::ptol_pal()(2), 
                    domain = spdata$animal)
 
-m<-spdata %>% 
+m<-spdata %>%
   leaflet() %>%
-  addProviderTiles(provider="Esri.OceanBasemap") %>% 
+  addProviderTiles(provider="Esri.OceanBasemap") %>%
   addCircleMarkers(radius=1,weight=2, opacity=0.5, color = ~pal(animal)) %>%
-  #addPolylines(lng=~x, lat=~y, group = ~animal, color='red') %>% 
+  #addPolylines(lng=~x, lat=~y, group = ~animal, color='red') %>%
   addLegend(pal = pal,values = ~animal,labels = ~animal)
 
 m
 
 ```
+
 
 ###Crawl model fit
 For each individual, fit a correlated random walk model to the data and estimate parameters a and P.
@@ -225,17 +226,18 @@ pal <- colorFactor(ggthemes::ptol_pal()(n),
                    domain = sf_pred_lines$deployid) #set color pallete
 
 #map of paths
-m <- sf_pred_lines %>% 
-  sf::st_transform(4326) %>% 
-  leaflet() %>% 
-  addProviderTiles("Esri.OceanBasemap") %>% 
-  addPolylines(weight = 2, color = ~pal(deployid)) %>% 
-  addLegend(pal = pal,values = ~deployid,labels = ~deployid) 
+m <- sf_pred_lines %>%
+  sf::st_transform(4326) %>%
+  leaflet() %>%
+  addProviderTiles("Esri.OceanBasemap") %>%
+  addPolylines(weight = 2, color = ~pal(deployid)) %>%
+  addLegend(pal = pal,values = ~deployid,labels = ~deployid)
   #suspendScroll()
 
 m
 
 ```
+
 
 ##Simulate error in track prediction
 Use the posterior distributin of the model to generate N simulated tracksCreate and map simulated tracks from posterior distribution using crawlr. 
@@ -262,17 +264,16 @@ sim_points <- sf::st_as_sf(sim_points)
 sim_points <- sf::st_transform(sim_points,4326)
 
 #build map using leaflet
-m<-sf_pred_lines %>% 
-  sf::st_transform(4326) %>% 
-  leaflet() %>% 
-  addProviderTiles("Esri.OceanBasemap") %>% 
-  addCircleMarkers(data = sample_frac(sim_points, 0.25), radius = 2, weight = 2, 
+m<-sf_pred_lines %>%
+  sf::st_transform(4326) %>%
+  leaflet() %>%
+  addProviderTiles("Esri.OceanBasemap") %>%
+  addCircleMarkers(data = sample_frac(sim_points, 0.25), radius = 2, weight = 2,
                    opacity = 3, stroke = FALSE,
-                   color = "purple") %>% 
-  addPolylines(weight = 2, color = ~pal(deployid)) %>% 
+                   color = "purple") %>%
+  addPolylines(weight = 2, color = ~pal(deployid)) %>%
   addLegend(pal = pal, values = ~deployid, labels = ~deployid)
 
 m
   
 ```
-
